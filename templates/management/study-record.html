@@ -1,0 +1,108 @@
+{% extends 'management/public/layout.html' %}
+{% load staticfiles %}
+{% block page-title-text %}学习记录{% endblock %}
+{% block page-content %}
+    <div class="row">
+
+        <div class="panel panel-default" id="filter-block">
+            <form action="" method="post">
+                {% csrf_token %}
+                <div class="panel-heading">
+                    <div class="panel-control">
+                        <a class="btn btn-warning" id="data-redis"><i class="fa fa-refresh"></i> 数据清洗</a>
+                        <a class="btn btn-default" data-target="#filter-block-body" data-toggle="collapse">
+                            <i class="fa fa-angle-double-down"></i>
+                        </a>
+                    </div>
+                    <h3 class="panel-title">
+                        <i class="fa fa-filter"></i> 选项过滤
+                        <small>仅样式演示</small>
+                    </h3>
+                </div>
+                <div id="filter-block-body" class="collapse in">
+                    <div class="panel-body">
+                        <div class="row">
+                            <div class="col-sm-2">
+                                <div class="form-group">
+                                    <label class="control-label">用户名</label>
+                                    <input type="text" class="form-control" id="username">
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                    <div class="panel-footer">
+                        <button class="btn btn-success" type="button" id="btn-filter">提交</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="panel panel-default" id="entity-list">
+
+            <div class="panel-body">
+                <p>您可以再此处进行数据渲染...</p>
+                <ul>
+                    <li>关于您需要做什么，请参阅TODO.md文件</li>
+                    <li>期望您使用 `echarts` 进行图表的渲染...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block js %}
+    <script src="{% static 'management/plugins/bootbox/bootbox.js' %}"></script>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $('#btn-filter').click(function () {
+                var name = $('#username').val();
+                if(name==''){
+                    $.niftyNoty({
+                        type: 'danger',
+                        message: '用户名不得为空',
+                        container: 'floating',
+                        timer: 5000
+                    });
+                }
+                $.post('{% url 'account-record' %}',{'csrfmiddlewaretoken': '{{ csrf_token }}','username':name},function(json){
+                    console.log(json)
+                },'json')
+            });
+            $('#data-redis').click(function () {
+                $.getJSON('{% url 'data-refresh' %}', function (json) {
+                    if(json.errCode>0){
+                        $.niftyNoty({
+                            type: 'danger',
+                            message: json.msg,
+                            container: 'floating',
+                            timer: 5000
+                        });
+                    }else{
+                        bootbox.dialog({
+                            title: json.title,
+                            message: json.tpl,
+                            buttons: {
+                                success: {
+                                    label: "确认清洗",
+                                    className: "btn-success",
+                                    callback: function () {
+                                        $.post('{% url 'data-refresh' %}', {'csrfmiddlewaretoken': '{{ csrf_token }}'}, function(jsonD){
+                                            console.log(jsonD);
+                                            $.niftyNoty({
+                                                type: 'success',
+                                                message: '<strong>完成!</strong> 已成功完成清洗任务 '+ jsonD.msg,
+                                                container: 'floating',
+                                                timer: 5000
+                                            });
+                                        },'json')
+
+                                    }
+                                },
+                            }
+                        })
+                    }
+                });
+            })
+        });
+    </script>
+{% endblock %}

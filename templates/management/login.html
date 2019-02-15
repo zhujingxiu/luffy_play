@@ -1,0 +1,27 @@
+{% extends 'management/public/base.html' %}
+{% block body %}
+  <div id="container" class="cls-container">
+    <!-- LOGIN FORM -->
+    <!--===================================================-->
+    <div class="cls-content">
+      <div class="cls-content-sm panel">
+        <div class="panel-body">
+          <div class="mar-ver pad-btm">
+            <h1 class="h3">Luffycity Admin</h1>
+            <p>Sign In to your account</p>
+          </div>
+          <form action="#" method="post">{% csrf_token %}
+            <div class="form-group">
+              <input type="text" name="username" class="form-control" placeholder="Username" autofocus>
+            </div>
+            <div class="form-group">
+              <input type="password" name="password" class="form-control" placeholder="Password">
+            </div>
+            <span style="color: red">{{ error }}</span>
+            <button class="btn btn-info btn-lg btn-block" type="submit">Sign In</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
