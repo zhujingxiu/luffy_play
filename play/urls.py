@@ -25,5 +25,5 @@ urlpatterns = [
     url('study-record$', views.StudyRecordView.as_view(), name='study-record'),
     url('account-record$', views.AccountStudyRecordView.as_view(), name='account-record'),
     url('data-refresh$', views.DataRefreshView.as_view(), name='data-refresh'),
-    url('study-count', views.StudyCountView.as_view(), name='study-count'),
+    url(r'study-count/(?P<uid>\w{32})', views.StudyCountView.as_view(), name='study-count'),
 ]

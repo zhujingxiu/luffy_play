@@ -5,58 +5,171 @@
     <div class="row">
 
         <div class="panel panel-default" id="filter-block">
-            <form action="" method="post">
-                {% csrf_token %}
-                <div class="panel-heading">
-                    <div class="panel-control">
-                        <a class="btn btn-warning" id="data-redis"><i class="fa fa-refresh"></i> 数据清洗</a>
-                        <a class="btn btn-default" data-target="#filter-block-body" data-toggle="collapse">
-                            <i class="fa fa-angle-double-down"></i>
-                        </a>
-                    </div>
-                    <h3 class="panel-title">
-                        <i class="fa fa-filter"></i> 选项过滤
-                        <small>仅样式演示</small>
-                    </h3>
-                </div>
-                <div id="filter-block-body" class="collapse in">
-                    <div class="panel-body">
-                        <div class="row">
-                            <div class="col-sm-2">
-                                <div class="form-group">
-                                    <label class="control-label">用户名</label>
-                                    <input type="text" class="form-control" id="username">
-                                </div>
-                            </div>
 
+            <div class="panel-heading">
+                <div class="panel-control">
+                    <a class="btn btn-warning" id="data-redis"><i class="fa fa-refresh"></i> 数据清洗</a>
+                    <a class="btn btn-default" data-target="#filter-block-body" data-toggle="collapse">
+                        <i class="fa fa-angle-double-down"></i>
+                    </a>
+                </div>
+                <h3 class="panel-title">
+                    <i class="fa fa-filter"></i> 选项过滤
+                    <small>仅样式演示</small>
+                </h3>
+            </div>
+            <div id="filter-block-body" class="collapse in">
+                <div class="panel-body">
+                    <div class="row">
+                        <div class="col-sm-2">
+                            <div class="form-group">
+                                <label class="control-label">用户名</label>
+                                <input type="text" class="form-control" id="filterUsername">
+                            </div>
                         </div>
 
                     </div>
-                    <div class="panel-footer">
-                        <button class="btn btn-success" type="button" id="btn-filter">提交</button>
-                    </div>
+
                 </div>
-            </form>
+                <div class="panel-footer">
+                    <button class="btn btn-success" type="button" id="btn-filter">提交</button>
+                </div>
+            </div>
         </div>
         <div class="panel panel-default" id="entity-list">
 
             <div class="panel-body">
-                <p>您可以再此处进行数据渲染...</p>
-                <ul>
-                    <li>关于您需要做什么，请参阅TODO.md文件</li>
-                    <li>期望您使用 `echarts` 进行图表的渲染...</li>
-                </ul>
+                <table id="list"></table>
             </div>
         </div>
     </div>
 {% endblock %}
 {% block js %}
+    <link rel="stylesheet" href="{% static 'management/plugins/bootstrap-table/bootstrap-table.min.css' %}">
+    <script src="{% static 'management/plugins/bootstrap-table/bootstrap-table.min.js' %}"></script>
     <script src="{% static 'management/plugins/bootbox/bootbox.js' %}"></script>
     <script type="text/javascript">
+        var dataValue = function (str, spt, int_val) {
+            if (str == '') {
+                return 0
+            }
+            var data_arr = str.split(spt);
+            var pow_val = 0;
+            var sum_val = 0;
+            for (var i = data_arr.length - 1; i >= 0; i--) {
+                sum_val += parseInt(data_arr[i]) * Math.pow(int_val, pow_val);
+                pow_val++;
+            }
+            return sum_val
+        };
+        var locationFormatter = function (value, row, index) {
+            return '<span> ' + row.ip_addr + '</span> <br> <span>' + value + '</span>';
+        };
+        var rateFormatter = function (value, row, index) {
+            var new_value = dataValue(value, ':', 60);
+            var new_total = dataValue(row.total, ':', 60);
+            return '<span > ' + parseFloat(new_value / new_total * 100).toFixed(2) + ' %</span>';
+        };
+        var keepFormatter = function (value, row, index) {
+            return '<span style="color:red" > ' + value + '</span> / <span>' + row.total + '</span>';
+        };
+        var usernameFormater = function (value, row, index) {
+            return '<a href="'+ row.user_link +'" class="btn btn-info" > ' + value + '</a>';
+        };
+        function refreshTableList() {
+            $('#list').bootstrapTable({
+                url: '{% url 'account-record' %}',         //请求后台的URL（*）
+                method: 'get',                      //请求方式（*）
+                //toolbar: '#toolbar',                //工具按钮用哪个容器
+                striped: true,                      //是否显示行间隔色
+                cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
+                pagination: true,                   //是否显示分页（*）
+                sortable: true,                     //是否启用排序
+                sortOrder: "desc",                   //排序方式
+                sidePagination: "server",           //分页方式：client客户端分页，server服务端分页（*）
+                pageNumber: 1,                       //初始化加载第一页，默认第一页
+                pageSize: 20,                       //每页的记录行数（*）
+                pageList: [10, 20, 30],        //可供选择的每页的行数（*）
+                uniqueId: "RowId",
+                queryParams: function (params) {
+                    return {
+                        'username': $('#filterUsername').val(),
+                        limit: params.limit,   //页面大小
+                        offset: params.offset,  //页码
+                        sort: params.sort,  //排序列名
+                        order: params.order//排位命令（desc，asc）
+                    }
+                },
+                columns: [
+                    {
+                        field: 'user',
+                        align: 'center',
+                        valign: 'middle',
+                        formatter: usernameFormater,
+                        sortable: true,
+                        title: '用户'
+                    },
+                    {
+                        field: 'start_time',
+                        align: 'center',
+                        valign: 'middle',
+                        sortable: true,
+                        title: '日期时间'
+                    },
+                    {
+                        field: 'title',
+                        align: 'center',
+                        valign: 'middle',
+                        sortable: true,
+                        title: '视频信息'
+                    },
+                    {
+                        field: 'play_limit',
+                        align: 'center',
+                        valign: 'middle',
+                        formatter: keepFormatter,
+                        sortable: true,
+                        title: '观看时长'
+                    },
+                    {
+                        field: 'play_limit',
+                        align: 'center',
+                        valign: 'middle',
+                        formatter: rateFormatter,
+                        sortable: true,
+                        title: '观看比例'
+                    },
+                    {
+                        field: 'degree_course',
+                        align: 'center',
+                        valign: 'middle',
+                        sortable: true,
+                        title: '学位课程'
+                    },
+                    {
+                        field: '',
+                        align: 'center',
+                        valign: 'middle',
+                        sortable: true,
+                        title: '导师'
+                    },
+                    {
+                        field: 'location',
+                        align: 'center',
+                        valign: 'middle',
+                        formatter: locationFormatter,
+                        sortable: true,
+                        title: '观看地点'
+                    },
+                ]
+            })
+        }
+
         $(document).ready(function () {
+
             $('#btn-filter').click(function () {
                 var name = $('#username').val();
-                if(name==''){
+                if (name == '') {
                     $.niftyNoty({
                         type: 'danger',
                         message: '用户名不得为空',
@@ -64,20 +177,18 @@
                         timer: 5000
                     });
                 }
-                $.post('{% url 'account-record' %}',{'csrfmiddlewaretoken': '{{ csrf_token }}','username':name},function(json){
-                    console.log(json)
-                },'json')
+                refreshTableList()
             });
             $('#data-redis').click(function () {
                 $.getJSON('{% url 'data-refresh' %}', function (json) {
-                    if(json.errCode>0){
+                    if (json.errCode > 0) {
                         $.niftyNoty({
                             type: 'danger',
                             message: json.msg,
                             container: 'floating',
                             timer: 5000
                         });
-                    }else{
+                    } else {
                         bootbox.dialog({
                             title: json.title,
                             message: json.tpl,
@@ -86,16 +197,20 @@
                                     label: "确认清洗",
                                     className: "btn-success",
                                     callback: function () {
-                                        $.post('{% url 'data-refresh' %}', {'csrfmiddlewaretoken': '{{ csrf_token }}'}, function(jsonD){
-                                            console.log(jsonD);
-                                            $.niftyNoty({
-                                                type: 'success',
-                                                message: '<strong>完成!</strong> 已成功完成清洗任务 '+ jsonD.msg,
-                                                container: 'floating',
-                                                timer: 5000
-                                            });
-                                        },'json')
-
+                                        bootbox.confirm('确认执行清洗?', function () {
+                                            $.post('{% url 'data-refresh' %}', {'csrfmiddlewaretoken': '{{ csrf_token }}'}, function (jsonD) {
+                                                console.log(jsonD);
+                                                $('#do-progress-bar').addClass('active');
+                                                $.niftyNoty({
+                                                    type: 'success',
+                                                    message: '<strong>完成!</strong> 已成功完成清洗任务 ' + jsonD.msg,
+                                                    container: 'floating',
+                                                    timer: 5000
+                                                });
+                                                return true;
+                                            }, 'json');
+                                        });
+                                        return false;
                                     }
                                 },
                             }

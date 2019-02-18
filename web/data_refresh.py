@@ -16,37 +16,34 @@ class DataRefresh(object):
         self.redis = redis.Redis(host='127.0.0.1', port=6379)
         self.data_dir = data_dir
 
+    def data_files(self):
+        data = []
+        if not os.path.exists(self.data_dir):
+            return data
+        for _curfile in os.listdir(self.data_dir):
+            if os.path.isdir(_curfile):
+                continue
+            filename = os.path.basename(_curfile)
+            if not filename.startswith('viewlogs') and not filename.endswith('.csv'):
+                continue
+            day = _curfile.split('@')[-1].split('.')[0]
+            data.append({'name': _curfile, 'day': day, 'path': '/'.join([self.data_dir, filename])})
+        return data
+
     def run(self):
-        if os.path.exists(self.data_dir):
-            for _curfile in os.listdir(self.data_dir):
-                if os.path.isdir(_curfile):
-                    continue
-                filename = os.path.basename(_curfile)
-                if not filename.startswith('viewlogs') and not filename.endswith('.csv'):
-                    continue
-                day = _curfile.split('@')[-1].split('.')[0]
-                data_dict = self.read_csv_file('/'.join([self.data_dir, filename]), day)
-                # print(filename, ' 行数：%d, 列数： %d' % row_col)
+        if not self.data_files():
+            return False
+        for item in self.data_files():
 
-    def read_csv(self, file):
-        print(file)
-        nrows , ncols = 0, 0
-        try:
-            data = xlrd.open_workbook(file)
-            table = data.sheet_by_index(0)
-            nrows = table.nrows  # 获取该sheet中的有效行数
-            ncols = table.ncols  # 获取列表的有效列数
-        except Exception as e:
-            print(e)
-
-        return nrows, ncols
+            data_dict = self.read_csv_file(item.get('path'), item.get('day'))
+            # print(filename, ' 行数：%d, 列数： %d' % row_col)
 
     def read_csv_file(self, filename, day):
         file_lines = {}
         day = ''.join(day.split('-'))
         with open(filename) as f:
             reader = csv.DictReader(f)
-            for index, row in enumerate(reader, 1):
+            for row in reader:
                 if len(row) != 13:
                     continue
 

@@ -1,7 +1,29 @@
+{% load staticfiles %}
+<div class="panel">
+    <!--Panel heading-->
+    <div class="panel-heading">
+        <div class="panel-control">
+            <div class="progress progress-md">
+                <div id="do-progress-bar" style="width: 0" class="progress-bar progress-bar-primary progress-bar-striped"></div>
+            </div>
+        </div>
+        <h3 class="panel-title">清洗文件</h3>
+    </div>
+    <!--Panel body-->
+    <div class="panel-body">
+        <div class="scroll-box" style="max-height:280px;overflow-y: scroll">
+            <ul class="list-group">
+                {% for item in files %}
+                    <li class="list-group-item" data-day="{{ item.day }}">{{  forloop.counter }}.{{ item.name }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% if last_time %}
+        <div class="panel-footer">
+            <p>上次执行时间：{{ last_time }}</p>
+        </div>
+    {% endif %}
+</div>
 
-<h1>要数据清洗了</h1>
-{{ datetime }}
-{% if last_time %}
-<p>上次执行时间：{{ last_time }}</p>
-{% endif %}
 
