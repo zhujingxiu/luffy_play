@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 # _AUTHOR_  : zhujingxiu
 # _DATE_    : 2019/2/13
-import redis
+from .my_redis import MyRedis
 import json
 import os
 import xlrd
@@ -13,8 +13,12 @@ from web.models import Account, EnrolledCourse, CourseSection, EnrolledDegreeCou
 class DataRefresh(object):
 
     def __init__(self, data_dir):
-        self.redis = redis.Redis(host='127.0.0.1', port=6379)
+        self.__redis = MyRedis('127.0.0.1')
         self.data_dir = data_dir
+        self.__redis.set('current_reading', '')
+        self.__redis.set('reading_number', 0)
+        self.__redis.set('read_all', 0)
+        self.__redis.ltrim('read_files', 1, 0)
 
     def data_files(self):
         data = []
@@ -33,14 +37,18 @@ class DataRefresh(object):
     def run(self):
         if not self.data_files():
             return False
+        self.__redis.set('read_all', len(self.data_files()))
         for item in self.data_files():
-
-            data_dict = self.read_csv_file(item.get('path'), item.get('day'))
-            # print(filename, ' 行数：%d, 列数： %d' % row_col)
+            self.__redis.set('current_reading', '%s|%s' % (item.get('name'), item.get('day')))
+            self.__redis.incr('reading_number')
+            data_line = self.read_csv_file(item.get('path'), item.get('day'))
+            print(item.get('day'),data_line)
+            self.__redis.lpush('read_files', json.dumps({'key': item.get('day'), 'val': len(data_line.keys())}))
+        self.__redis.set('read_all', -1)
 
     def read_csv_file(self, filename, day):
         file_lines = {}
-        day = ''.join(day.split('-'))
+        day = day.replace('-', '')
         with open(filename) as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -53,7 +61,7 @@ class DataRefresh(object):
                 item = {
                     "vid": data.get('vid'),
                     "title": data.get('title'),
-                    "course_title": data.get('course_title'),
+                    "mentor": data.get('mentor'),
                     "degree_course": data.get('degree_course'),
                     "ip_addr": data.get('ip_addr'),
                     "location": data.get('location'),
@@ -63,13 +71,11 @@ class DataRefresh(object):
                     "start_time": data.get('start_time'),
                 }
                 key = '%s-%s-%s-%s' % (data.get('uid'), data.get('course_type'), data.get('course_id'), day)
-                self.redis.lpush(key, json.dumps(item))
+                self.__redis.lpush(key, json.dumps(item))
                 if file_lines.get(key):
                     file_lines[key].append(item)
                 else:
                     file_lines[key] = [item]
-        print('*'*100)
-        print(day, file_lines)
         return file_lines
 
     def parse_csv_line(self, row):
@@ -88,49 +94,49 @@ class DataRefresh(object):
         params = self.parse_url(play_place)
 
         account = self.get_account(uid, params.get('enrolled_course_id'))
-
         if not account:
             return False
-        section = self.get_course_section(vid, params.get('course_section_id'))
-        if not section:
+        course_section = self.get_course_section(vid, params.get('course_section_id'))
+        if not course_section:
             return False
-        course = section.chapter.course
-        memo = self.get_memo(account.uid, params.get('enrolled_course_id'))
+        mentor = self.get_mentor(account, course_section)
+        course = course_section.chapter.course
         data = {
-            'uid': account.uid,
-            'course_type': int(course.course_type == 2),
-            'course_id': course.pk,
-            'course_title': course.name,
-            'degree_course': course.degree_course.name if course.degree_course else '',
             "vid": vid,
-            "title": title if title else section.name,
+            "uid": account.uid,
+            "mentor": mentor.username if mentor else '',
+            "course_id": course.pk,
+            "course_type": int(course.course_type == 2),
+            "degree_course": course.degree_course.name if course.degree_course else '',
+            "title": title if title else course_section.name,
             "ip_addr": ip_addr,
             "play_limit": play_limit,
             "play_place": play_place,
-            "total": section.video_time,
+            "total": course_section.video_time,
             "location": location,
             "start_time": start_time
         }
         return data
 
     def get_account(self, uid=None, enrolled_course_id=None):
+        account = None
         if not uid and not enrolled_course_id:
-            return False
+            return account
         if uid:
             account = Account.objects.filter(uid=uid).first()
         elif enrolled_course_id:
-            account = EnrolledCourse.objects.filter(pk=enrolled_course_id).first().account
-        else:
-            account = None
+            entity = EnrolledCourse.objects.filter(pk=enrolled_course_id).first()
+            if entity:
+                account = entity.account
 
         if self.check_account(account):
-            return False
+            return None
         return account
 
     def check_account(self, account):
-        if not account or not isinstance(account, dict):
+        if not account or not isinstance(account, Account):
             return False
-        if not account.get('username'):
+        if not account.username:
             return False
         return True
 
@@ -148,6 +154,7 @@ class DataRefresh(object):
         描述：841为`CourseSection`表中的`ID`
         :param url:
         :return:
+        格式固定，避免使用开销较大的正则匹配
         '''
         data = {}
         if not url or not (url.startswith('https://www.luffycity.com') or url.startswith('https://m.luffycity.com')):
@@ -186,13 +193,26 @@ class DataRefresh(object):
         :return:
         '''
         section = CourseSection.objects.filter(section_link=video_id, pk=course_section_id).first()
-        if not section:
-            return False
+
         return section
 
-    def get_memo(self, uid, enrolled_course_id):
-        enrolled_degree_course = EnrolledDegreeCourse.objects.filter(account__uid=uid, pk=enrolled_course_id).first()
+    def get_mentor(self, account, course_section):
+        '''
+        可根据⾃定义ID以及观看地址上的报名记录ID确定导师
+        or
+        EnrolledDegreeCourse
+            unique_together = ('account', 'degree_course')
+        :param uid:
+        :param course_section:
+        :return:
+        '''
+        if not account or not course_section:
+            return None
+        degree_course = course_section.chapter.course.degree_course
+        enrolled_degree_course = EnrolledDegreeCourse.objects.filter(account=account,
+                                                                     degree_course=degree_course).first()
         if not enrolled_degree_course:
-            return False
-        account = enrolled_degree_course.account
-        return account
+            return None
+
+        mentor = enrolled_degree_course.mentor
+        return mentor

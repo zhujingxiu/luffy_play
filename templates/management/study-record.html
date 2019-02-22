@@ -78,18 +78,13 @@
         };
         function refreshTableList() {
             $('#list').bootstrapTable({
-                url: '{% url 'account-record' %}',         //请求后台的URL（*）
-                method: 'get',                      //请求方式（*）
+                url: '{% url 'account-record' %}',
+                method: 'get',
                 //toolbar: '#toolbar',                //工具按钮用哪个容器
-                striped: true,                      //是否显示行间隔色
-                cache: false,                       //是否使用缓存，默认为true，所以一般情况下需要设置一下这个属性（*）
-                pagination: true,                   //是否显示分页（*）
-                sortable: true,                     //是否启用排序
+                striped: true,
+                cache: false,
                 sortOrder: "desc",                   //排序方式
                 sidePagination: "server",           //分页方式：client客户端分页，server服务端分页（*）
-                pageNumber: 1,                       //初始化加载第一页，默认第一页
-                pageSize: 20,                       //每页的记录行数（*）
-                pageList: [10, 20, 30],        //可供选择的每页的行数（*）
                 uniqueId: "RowId",
                 queryParams: function (params) {
                     return {
@@ -101,6 +96,18 @@
                     }
                 },
                 columns: [
+                    {
+                        field: 'no',
+                        title: '序号',
+                        sortable: true,
+                        align: "center",
+                        width: 40,
+                        formatter: function (value, row, index) {
+                            var pageSize=$('#list').bootstrapTable('getOptions').pageSize;
+                            var pageNumber=$('#list').bootstrapTable('getOptions').pageNumber;
+                            return pageSize * (pageNumber - 1) + index + 1;
+                        }
+                    },
                     {
                         field: 'user',
                         align: 'center',
@@ -147,7 +154,7 @@
                         title: '学位课程'
                     },
                     {
-                        field: '',
+                        field: 'mentor',
                         align: 'center',
                         valign: 'middle',
                         sortable: true,
@@ -166,7 +173,7 @@
         }
 
         $(document).ready(function () {
-
+            refreshTableList();
             $('#btn-filter').click(function () {
                 var name = $('#username').val();
                 if (name == '') {
@@ -177,7 +184,7 @@
                         timer: 5000
                     });
                 }
-                refreshTableList()
+                $('#list').bootstrapTable('refresh');
             });
             $('#data-redis').click(function () {
                 $.getJSON('{% url 'data-refresh' %}', function (json) {
@@ -209,6 +216,34 @@
                                                 });
                                                 return true;
                                             }, 'json');
+                                            var my_t = setInterval(function(){
+                                                $.getJSON('{% url 'data-refresh' %}', {progress:1,_t:Math.random()}, function(json){
+                                                    console.log(json)
+                                                    if(json.errCode==0) {
+                                                        $('#do-progress-bar').css('width', parseFloat(json.data.progress)+'%');
+                                                        $('#doing-item').text(json.data.item);
+                                                        var _current = json.data.item;
+                                                        var _rel = _current.split('|')[1];
+
+                                                        $('.list-group-item[data-day="'+_rel+'"]').addClass('list-group-item-primary');
+                                                        for (i in json.data.read){
+                                                            console.log('------',i,json.data.read[i])
+                                                            var _item = json.data.read[i];
+                                                            var _pre_html = '<span class="badge badge-success">'+_item['val']+'</span>'
+                                                            $('.list-group-item[data-day="'+_item['key']+'"]').
+                                                                removeClass('list-group-item-primary').
+                                                                addClass('list-group-item-success').
+                                                                find('.badge').remove().parent().
+                                                                prepend(_pre_html);
+                                                        }
+                                                    }else{
+                                                        clearInterval(my_t);
+                                                        location.reload()
+                                                    }
+
+                                                });
+                                            }, 1000)
+
                                         });
                                         return false;
                                     }

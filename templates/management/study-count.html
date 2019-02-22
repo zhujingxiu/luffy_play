@@ -3,43 +3,117 @@
 {% block page-title-text %}用户观看统计{% endblock %}
 {% block page-content %}
     <div class="row">
-        <div class="panel panel-success">
-            <div class="panel-body">
-                <div id="user-charts" style="margin: 0;padding: 0;width:100%;height:360px;"></div>
+        <div class="panel">
+            <div class="panel-heading" >
+                <h3 class="panel-title">用户观看统计: <small id="stat-user"></small></h3>
             </div>
-        </div>
-        <div class="panel panel-success">
-            <div class="panel-body">
-                <p>您可以再此处进行数据渲染...</p>
-                <ul>
-                    <li>关于您需要做什么，请参阅TODO.md文件</li>
-                    <li>期望您使用 `echarts` 进行图表的渲染...</li>
-                </ul>
+            <div class="panel-body" style="position: relative">
+                <div id="user-charts" style="width:100%;height:360px;"></div>
+                <div class="filter-block" style="width:80%;position: absolute;top: 30px;left: 170px">
+                    <form class="form-inline">
+                        <div class="col-sm-7">
+                            <a class="daterange btn btn-sm btn-default btn-rounded" data-rel="month">月</a>
+                            <a class="daterange btn btn-sm btn-default btn-rounded" data-rel="season">季度</a>
+                            <a class="daterange btn btn-sm btn-default btn-rounded" data-rel="semester">半年</a>
+                            <a class="daterange btn btn-sm btn-default btn-rounded" data-rel="year">年</a>
+                            <a class="daterange btn btn-sm btn-primary btn-rounded" data-rel="all">所有</a>
+                        </div>
+                        <div class="col-sm-5 text-right">
+
+                            <div class="input-group mar-btm">
+                                <span class="input-group-addon">开始时间</span>
+                                <input type="text" id="startDate" class="form-control datepicker" placeholder="开始时间" style="width: 99px">
+                            </div>
+                            <div class="input-group mar-btm">
+                                <span class="input-group-addon">结束时间</span>
+                                <input type="text" id="endDate" class="form-control datepicker" placeholder="结束时间" style="width: 99px">
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
 {% endblock %}
 {% block js %}
+    <link rel="stylesheet" href="{% static 'management/plugins/datepicker/datepicker3.css' %}">
+    <script src="{% static 'management/plugins/datepicker/bootstrap-datepicker.js' %}"></script>
+    <script src="{% static 'management/plugins/datepicker/locales/bootstrap-datepicker.zh-CN.js' %}"></script>
     <script src="{% static 'management/plugins/echarts/simple.min.js' %}"></script>
     <script>
-        var render_charts = function () {
+        $(function () {
+            $('.daterange').click(function(){
+                $('.daterange').removeClass('btn-primary').addClass('btn-default');
+                $(this).addClass('btn-primary').removeClass('btn-default');
+                $.post('{% url 'study-count' uid %}', {'csrfmiddlewaretoken': '{{ csrf_token }}','mode': $(this).data('rel'),'_t': Math.random()}, function(json){
+                    if(json.errCode>0){
+                        $.niftyNoty({
+                            type: 'danger',
+                            message: json.msg,
+                            container: 'floating',
+                            timer: 5000
+                        });
+                    }else{
+                        var day_list = json.data.day;
+                        $('#startDate').val(day_list[0]);
+                        $('#endDate').val(day_list[day_list.length -1]);
+                        $('#stat-user').html(json.data.user)
+                        render_charts(day_list, json.data.minute);
+                    }
+                },'json')
+            });
+
+            $('.datepicker').datepicker({
+                format:'yyyy-mm-dd',
+                autoclose: true
+            });
+
+            $('.daterange[data-rel="all"]').trigger('click')
+        });
+        var render_charts = function (day_list, minute_list) {
+
             var myChart = echarts.init(document.getElementById('user-charts'));
-            option = {
+            var option = {
+                title: {
+                    left: 'center',
+                    text: '用户观看时间统计',
+                    textVerticalAlign: 'top'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                },
+                toolbox:{
+                    orient: 'vertical',
+                    feature: {
+                        saveAsImage: {}
+                    }
+                },
                 xAxis: {
                     type: 'category',
-                    data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                    data: day_list
                 },
                 yAxis: {
-                    type: 'value'
+                    type: 'value',
+                    position: 'right'
                 },
                 series: [{
-                    data: [820, 932, 901, 934, 1290, 1330, 1320],
-                    type: 'line'
-                }]
+                    type: 'line',
+                    name: '观看时长',
+                    data: minute_list,
+                    smooth: true,
+                }],
+                dataZoom: [
+                    {
+                        id: 'dataZoomX',
+                        type: 'slider',
+                        xAxisIndex: [0],
+                        filterMode: 'filter'
+                    },
+                ]
             };
 
             myChart.setOption(option);
         };
-        render_charts();
+
     </script>
 {% endblock %}
